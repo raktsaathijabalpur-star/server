@@ -1,6 +1,8 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
+import Conversation from "../models/Conversation.js";
+import Message from "../models/Message.js";
 
 // userId -> Set of socket ids (a user can have multiple tabs/devices open)
 const onlineUsers = new Map();
@@ -22,10 +24,12 @@ export function initSocket(httpServer) {
       if (!token) return next(new Error("No token provided"));
 
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
-      const user = await User.findById(decoded.id).select("_id name");
+      const user = await User.findById(decoded.id).select("_id name role bloodGroup");
       if (!user) return next(new Error("User not found"));
 
       socket.userId = user._id.toString();
+      socket.userRole = user.role;
+      socket.bloodGroup = user.bloodGroup;
       next();
     } catch (err) {
       next(new Error("Authentication failed"));
@@ -41,13 +45,16 @@ export function initSocket(httpServer) {
     onlineUsers.get(userId).add(socket.id);
     socket.join(userId);
 
+    // Donors also join a room for their blood group, so a new blood request can
+    // be pushed only to donors who are able to give to that patient.
+    if (socket.userRole === "donor" && socket.bloodGroup) {
+      socket.join(`donor:${socket.bloodGroup}`);
+    }
+
     io.emit("presence:update", { userId, online: true });
 
     socket.on("message:send", async ({ conversationId, text }, callback) => {
       try {
-        const Conversation = (await import("../models/Conversation.js")).default;
-        const Message = (await import("../models/Message.js")).default;
-
         const conversation = await Conversation.findById(conversationId);
         if (!conversation || !conversation.participants.map(String).includes(userId)) {
           return callback?.({ ok: false, error: "Conversation not found" });

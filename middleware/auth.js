@@ -29,3 +29,14 @@ export const protect = asyncHandler(async (req, res, next) => {
     throw new Error("Not authorized, token invalid or expired");
   }
 });
+
+// Usage: router.post("/", protect, requireRole("patient"), handler)
+export const requireRole =
+  (...roles) =>
+  (req, res, next) => {
+    if (!roles.includes(req.user?.role)) {
+      res.status(403);
+      return next(new Error(`Only ${roles.join(" / ")} accounts can do this`));
+    }
+    next();
+  };

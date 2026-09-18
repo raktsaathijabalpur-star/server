@@ -2,14 +2,15 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import morgan from "morgan";
+import http from "http";
 import connectDB from "./config/db.js";
 import authRoutes from "./routes/authRoutes.js";
 import requestRoutes from "./routes/requestRoutes.js";
-import { notFound, errorHandler } from "./middleware/errorHandler.js";
-import http from "http";
-import { initSocket } from "./socket/index.js";
+import donationRoutes from "./routes/donationRoutes.js";
 import messageRoutes from "./routes/chatRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
+import { notFound, errorHandler } from "./middleware/errorHandler.js";
+import { initSocket } from "./socket/index.js";
 
 dotenv.config();
 connectDB();
@@ -30,9 +31,13 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api", messageRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/requests", requestRoutes);
+// Mounted at "/api": exposes /api/donations/me, /api/donations, /api/donors/top
+app.use("/api", donationRoutes);
+// chatRoutes applies `protect` to everything under "/api", so it must stay the
+// LAST "/api" router — otherwise it would run before the routers above.
+app.use("/api", messageRoutes);
 
 // 404 + error handler — routes ke turant baad, listen se pehle
 app.use(notFound);

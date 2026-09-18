@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
 const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const ROLES = ["donor", "patient"];
 
 const userSchema = new mongoose.Schema(
   {
@@ -29,6 +30,13 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
       select: false,
     },
+    // "donor"   -> Donate Blood flow (sees requests, can accept them)
+    // "patient" -> Need Blood flow (creates requests, tracks them)
+    role: {
+      type: String,
+      enum: ROLES,
+      default: "donor",
+    },
     bloodGroup: {
       type: String,
       enum: BLOOD_GROUPS,
@@ -50,6 +58,12 @@ const userSchema = new mongoose.Schema(
     pincode: {
       type: String,
       trim: true,
+    },
+    // Donor onboarding: "Preferred Donation Area"
+    preferredArea: {
+      type: String,
+      trim: true,
+      default: "",
     },
     dateOfBirth: {
       type: Date,
@@ -84,6 +98,8 @@ const userSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+userSchema.index({ role: 1, bloodGroup: 1, availableToDonate: 1 });
+
 userSchema.pre("save", async function hashPassword(next) {
   if (!this.isModified("password")) return next();
   const salt = await bcrypt.genSalt(10);
@@ -101,11 +117,13 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     name: this.name,
     email: this.email,
     phone: this.phone,
+    role: this.role,
     bloodGroup: this.bloodGroup,
     city: this.city,
     state: this.state,
     area: this.area,
     pincode: this.pincode,
+    preferredArea: this.preferredArea,
     dateOfBirth: this.dateOfBirth,
     gender: this.gender,
     availableToDonate: this.availableToDonate,
@@ -117,4 +135,5 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
 };
 
 export const BLOOD_GROUP_ENUM = BLOOD_GROUPS;
+export const ROLE_ENUM = ROLES;
 export default mongoose.model("User", userSchema);

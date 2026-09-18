@@ -1,5 +1,5 @@
 import asyncHandler from "express-async-handler";
-import User from "../models/User.js";
+import User, { ROLE_ENUM } from "../models/User.js";
 import generateToken from "../utils/generateToken.js";
 
 // @desc  Register a new user
@@ -11,6 +11,7 @@ export const registerUser = asyncHandler(async (req, res) => {
     phone,
     email,
     password,
+    role,
     bloodGroup,
     city,
     state,
@@ -35,11 +36,15 @@ export const registerUser = asyncHandler(async (req, res) => {
     throw new Error("An account with this phone or email already exists");
   }
 
+  // Only "donor" or "patient" can be chosen at signup. Anything else -> donor.
+  const safeRole = ROLE_ENUM.includes(role) ? role : "donor";
+
   const user = await User.create({
     name,
     phone,
     email,
     password,
+    role: safeRole,
     bloodGroup,
     city,
     state,
@@ -98,7 +103,10 @@ export const getMe = asyncHandler(async (req, res) => {
   });
 });
 
-// @desc  Update profile / availability
+// Fields where an empty string from a form should be stored as "no value"
+const NULLABLE_FIELDS = ["dateOfBirth", "lastDonationDate", "gender"];
+
+// @desc  Update profile / availability / donor onboarding details
 // @route PUT /api/auth/me
 // @access Private
 export const updateMe = asyncHandler(async (req, res) => {
@@ -109,16 +117,19 @@ export const updateMe = asyncHandler(async (req, res) => {
     "state",
     "area",
     "pincode",
+    "preferredArea",
     "bloodGroup",
     "availableToDonate",
+    "lastDonationDate",
     "dateOfBirth",
     "gender",
     "avatarUrl",
   ];
+
   allowedFields.forEach((field) => {
-    if (req.body[field] !== undefined) {
-      req.user[field] = req.body[field];
-    }
+    if (req.body[field] === undefined) return;
+    const value = req.body[field];
+    req.user[field] = NULLABLE_FIELDS.includes(field) && value === "" ? null : value;
   });
 
   const updatedUser = await req.user.save();
