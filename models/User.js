@@ -90,9 +90,27 @@ const userSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Small profile photo stored as a data URL (the frontend shrinks it to
+    // ~160px first). For production, move this to Cloudinary / S3 and store the URL.
     avatarUrl: {
       type: String,
       default: "",
+    },
+    // Can open "Verify Donations". Set only from the database / scripts/makeAdmin.js —
+    // no API route ever accepts this field.
+    isAdmin: {
+      type: Boolean,
+      default: false,
+    },
+    // Profile -> Privacy Settings (donors)
+    privacy: {
+      showOnLeaderboard: { type: Boolean, default: true }, // appear on Top Donors
+      showInMatches: { type: Boolean, default: true }, // appear in a patient's "Matching Donors"
+    },
+    // Profile -> Notifications (in-app pop-ups)
+    notificationPrefs: {
+      newRequests: { type: Boolean, default: true },
+      requestUpdates: { type: Boolean, default: true },
     },
   },
   { timestamps: true }
@@ -114,6 +132,7 @@ userSchema.methods.comparePassword = function comparePassword(candidate) {
 userSchema.methods.toPublicJSON = function toPublicJSON() {
   return {
     id: this._id,
+    _id: this._id, // same value: lets code written as user._id (e.g. chat) work too
     name: this.name,
     email: this.email,
     phone: this.phone,
@@ -131,6 +150,15 @@ userSchema.methods.toPublicJSON = function toPublicJSON() {
     donationsCount: this.donationsCount,
     livesHelped: this.livesHelped,
     avatarUrl: this.avatarUrl,
+    isAdmin: this.isAdmin === true,
+    privacy: {
+      showOnLeaderboard: this.privacy?.showOnLeaderboard ?? true,
+      showInMatches: this.privacy?.showInMatches ?? true,
+    },
+    notificationPrefs: {
+      newRequests: this.notificationPrefs?.newRequests ?? true,
+      requestUpdates: this.notificationPrefs?.requestUpdates ?? true,
+    },
   };
 };
 

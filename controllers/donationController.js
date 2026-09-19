@@ -53,7 +53,11 @@ export const addDonation = asyncHandler(async (req, res) => {
 // @desc  Leaderboard: donors ranked by total donations
 // @route GET /api/donors/top
 export const getTopDonors = asyncHandler(async (req, res) => {
-  const donors = await User.find({ role: "donor", donationsCount: { $gt: 0 } })
+  const donors = await User.find({
+    role: "donor",
+    donationsCount: { $gt: 0 },
+    "privacy.showOnLeaderboard": { $ne: false }, // Profile -> Privacy Settings
+  })
     .sort({ donationsCount: -1, lastDonationDate: -1 })
     .limit(20)
     .select("name bloodGroup city donationsCount avatarUrl")

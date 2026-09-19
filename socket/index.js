@@ -9,6 +9,51 @@ const onlineUsers = new Map();
 
 let io;
 
+// ---- helpers that keep chat data between the two people who are actually chatting ----
+
+// ids of everybody who shares a conversation with this user
+async function chatPartnerIds(userId) {
+  const conversations = await Conversation.find({ participants: userId }).select("participants").lean();
+  const ids = new Set();
+  for (const c of conversations) {
+    for (const p of c.participants) if (String(p) !== String(userId)) ids.add(String(p));
+  }
+  return [...ids];
+}
+
+// online / offline is only told to people this user chats with (not the whole app)
+async function announcePresence(userId, online) {
+  try {
+    const partners = await chatPartnerIds(userId);
+    if (partners.length > 0) io.to(partners).emit("presence:update", { userId, online });
+  } catch (err) {
+    console.error("presence error:", err.message);
+  }
+}
+
+// "typing…" may only go to the other person of a conversation the sender belongs to.
+// Results are cached for a minute so typing doesn't hit the database on every key press.
+const TYPING_TTL_MS = 60 * 1000;
+const typingAllowed = new Map();
+async function canType(userId, conversationId, otherUserId) {
+  if (typeof conversationId !== "string" || typeof otherUserId !== "string") return false;
+  const key = `${conversationId}:${userId}:${otherUserId}`;
+  const until = typingAllowed.get(key);
+  if (until && until > Date.now()) return true;
+  try {
+    const ok = await Conversation.exists({
+      _id: conversationId,
+      participants: { $all: [userId, otherUserId] },
+    });
+    if (!ok) return false;
+    if (typingAllowed.size > 5000) typingAllowed.clear();
+    typingAllowed.set(key, Date.now() + TYPING_TTL_MS);
+    return true;
+  } catch (err) {
+    return false; // malformed id etc.
+  }
+}
+
 export function initSocket(httpServer) {
   io = new Server(httpServer, {
     cors: {
@@ -51,10 +96,13 @@ export function initSocket(httpServer) {
       socket.join(`donor:${socket.bloodGroup}`);
     }
 
-    io.emit("presence:update", { userId, online: true });
+    announcePresence(userId, true);
 
-    socket.on("message:send", async ({ conversationId, text }, callback) => {
+    socket.on("message:send", async ({ conversationId, text } = {}, callback) => {
       try {
+        if (typeof conversationId !== "string" || typeof text !== "string" || !text.trim() || text.length > 2000) {
+          return callback?.({ ok: false, error: "Message can't be empty or longer than 2000 characters" });
+        }
         const conversation = await Conversation.findById(conversationId);
         if (!conversation || !conversation.participants.map(String).includes(userId)) {
           return callback?.({ ok: false, error: "Conversation not found" });
@@ -91,8 +139,9 @@ export function initSocket(httpServer) {
       }
     });
 
-    socket.on("typing", ({ conversationId, otherUserId, isTyping }) => {
-      io.to(otherUserId).emit("typing", { conversationId, userId, isTyping });
+    socket.on("typing", async ({ conversationId, otherUserId, isTyping } = {}) => {
+      if (!(await canType(userId, conversationId, otherUserId))) return;
+      io.to(otherUserId).emit("typing", { conversationId, userId, isTyping: Boolean(isTyping) });
     });
 
     socket.on("disconnect", () => {
@@ -101,7 +150,7 @@ export function initSocket(httpServer) {
         sockets.delete(socket.id);
         if (sockets.size === 0) {
           onlineUsers.delete(userId);
-          io.emit("presence:update", { userId, online: false });
+          announcePresence(userId, false);
         }
       }
     });

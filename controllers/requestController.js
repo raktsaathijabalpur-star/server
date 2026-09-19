@@ -226,6 +226,7 @@ export const getMatchingDonors = asyncHandler(async (req, res) => {
   const filter = {
     role: "donor",
     availableToDonate: true,
+    "privacy.showInMatches": { $ne: false }, // Profile -> Privacy Settings
     _id: { $ne: req.user._id },
     bloodGroup: { $in: compatibleDonorGroups(request.bloodGroup) },
     $or: [{ lastDonationDate: null }, { lastDonationDate: { $lte: since } }],

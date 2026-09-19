@@ -1,4 +1,6 @@
+import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
+import User from "../models/User.js";
 import Message from "../models/Message.js";
 import { isUserOnline } from "../socket/index.js";
 
@@ -34,7 +36,15 @@ export const startConversation = async (req, res) => {
   try {
     const userId = req.user._id;
     const { otherUserId } = req.body;
-    if (!otherUserId) return res.status(400).json({ message: "otherUserId is required" });
+    if (!otherUserId || !mongoose.isValidObjectId(otherUserId)) {
+      return res.status(400).json({ message: "A valid otherUserId is required" });
+    }
+    if (String(otherUserId) === String(userId)) {
+      return res.status(400).json({ message: "You can't start a chat with yourself" });
+    }
+    if (!(await User.exists({ _id: otherUserId }))) {
+      return res.status(404).json({ message: "User not found" });
+    }
 
     let conversation = await Conversation.findOne({
       participants: { $all: [userId, otherUserId], $size: 2 },
@@ -56,7 +66,13 @@ export const getMessages = async (req, res) => {
   try {
     const userId = req.user._id;
     const { id } = req.params;
-    const { before, limit = 30 } = req.query;
+    const { before } = req.query;
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100); // 1..100
+
+    // a malformed id can never match a conversation of yours
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(404).json({ message: "Conversation not found" });
+    }
 
     const conversation = await Conversation.findById(id);
     if (!conversation || !conversation.participants.map(String).includes(String(userId))) {
@@ -64,11 +80,15 @@ export const getMessages = async (req, res) => {
     }
 
     const query = { conversation: id };
-    if (before) query.createdAt = { $lt: new Date(before) };
+    if (before) {
+      const beforeDate = new Date(before);
+      if (Number.isNaN(beforeDate.getTime())) return res.status(400).json({ message: "Invalid 'before' date" });
+      query.createdAt = { $lt: beforeDate };
+    }
 
     const messages = await Message.find(query)
       .sort({ createdAt: -1 })
-      .limit(Number(limit))
+      .limit(limit)
       .populate("sender", "name");
 
     // Mark as read + reset unread counter for this user

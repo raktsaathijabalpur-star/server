@@ -40,3 +40,12 @@ export const requireRole =
     }
     next();
   };
+
+// Usage: router.use(protect, requireAdmin). 403 (not 401): the frontend logs the user out on a 401.
+export const requireAdmin = (req, res, next) => {
+  if (req.user?.isAdmin !== true) {
+    res.status(403);
+    return next(new Error("Admin access only"));
+  }
+  next();
+};
