@@ -31,7 +31,7 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, message: "RaktSaathi API is running" });
+  res.json({ success: true, message: "Blood Seva API is running" });
 });
 
 app.use("/api/auth", authRoutes);

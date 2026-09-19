@@ -1,7 +1,7 @@
 {
-  "name": "raktsaathi-backend",
+  "name": "Blood Seva-backend",
   "version": "1.0.0",
-  "description": "RaktSaathi Jabalpur - Blood Donation Platform API",
+  "description": "Blood Seva Jabalpur - Blood Donation Platform API",
   "main": "server.js",
   "type": "module",
   "scripts": {

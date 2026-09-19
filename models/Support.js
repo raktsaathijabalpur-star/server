@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-// "Support Jabalpur RaktSaathi" — someone tapped "I've Donated" after paying by
+// "Support Jabalpur Blood Seva" — someone tapped "I've Donated" after paying by
 // bank transfer / QR. We can't confirm a bank transfer from inside the app, so
 // every record starts as "pending". Once you see the money in the account,
 // set status to "verified" (Mongo shell / Compass, or a future admin screen).

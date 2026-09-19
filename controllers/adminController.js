@@ -166,7 +166,7 @@ export const updateSupportStatus = asyncHandler(async (req, res) => {
     await notifyUser(existing.user, {
       type: "support:verified",
       title: "Contribution confirmed",
-      body: `Thank you! Your ₹${Number(existing.amount).toLocaleString("en-IN")} contribution to Jabalpur RaktSaathi was confirmed.`,
+      body: `Thank you! Your ₹${Number(existing.amount).toLocaleString("en-IN")} contribution to Jabalpur Blood Seva was confirmed.`,
       link: "/supporters",
     });
   }
