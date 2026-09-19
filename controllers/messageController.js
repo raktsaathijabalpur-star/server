@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 import Conversation from "../models/Conversation.js";
 import User from "../models/User.js";
 import Message from "../models/Message.js";
+import { withAvatarUrls } from "../utils/avatarUrl.js";
 import { isUserOnline } from "../socket/index.js";
 
 // GET /api/conversations — list current user's conversations with other participant + last message
@@ -22,6 +23,16 @@ export const getConversations = async (req, res) => {
         unreadCount: c.unreadCounts.get(String(userId)) || 0,
         online: other ? isUserOnline(other._id) : false,
       };
+    });
+
+    // give each chat partner a small avatar URL (or "" when they have no photo)
+    const others = formatted
+      .map((f) => f.otherUser)
+      .filter(Boolean)
+      .map((o) => ({ _id: o._id, name: o.name, bloodGroup: o.bloodGroup, city: o.city }));
+    const byId = new Map((await withAvatarUrls(others)).map((o) => [String(o._id), o]));
+    formatted.forEach((f) => {
+      if (f.otherUser) f.otherUser = byId.get(String(f.otherUser._id));
     });
 
     res.json({ conversations: formatted });

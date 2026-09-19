@@ -10,6 +10,9 @@ const supportSchema = new mongoose.Schema(
     amount: { type: Number, required: true, min: 1 },
     method: { type: String, enum: ["bank", "qr"], required: true },
     status: { type: String, enum: ["pending", "verified", "rejected"], default: "pending" },
+    // who confirmed / rejected it, and when (cleared if moved back to pending)
+    reviewedAt: { type: Date },
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     // Did the person tick "Show my name on the Supporters page"?
     // false (or missing, for older records) -> listed as "Anonymous supporter".
     showName: { type: Boolean, default: false },

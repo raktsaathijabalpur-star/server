@@ -1,6 +1,7 @@
 import asyncHandler from "express-async-handler";
 import Donation from "../models/Donation.js";
 import User from "../models/User.js";
+import { withAvatarUrls } from "../utils/avatarUrl.js";
 
 // @desc  Logged-in donor's donation history (newest first)
 // @route GET /api/donations/me
@@ -60,8 +61,8 @@ export const getTopDonors = asyncHandler(async (req, res) => {
   })
     .sort({ donationsCount: -1, lastDonationDate: -1 })
     .limit(20)
-    .select("name bloodGroup city donationsCount avatarUrl")
+    .select("name bloodGroup city donationsCount")
     .lean();
 
-  res.status(200).json({ success: true, donors });
+  res.status(200).json({ success: true, donors: await withAvatarUrls(donors) });
 });

@@ -6,6 +6,7 @@ import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import generateToken from "../utils/generateToken.js";
 import { getIO } from "../socket/index.js";
+import { notifyUser } from "../utils/notify.js";
 
 const OPEN_STATES = ["Open", "Accepted"];
 
@@ -309,6 +310,21 @@ export const deleteMe = asyncHandler(async (req, res) => {
     }
   } catch (err) {
     // socket server not ready — ignore
+  }
+
+  for (const request of ownOpen) {
+    for (const helper of request.helpers) {
+      await notifyUser(
+        helper.user,
+        {
+          type: "request:cancelled",
+          title: "Request cancelled",
+          body: `Request ${request.requestId} was cancelled by the patient.`,
+          link: "/requests",
+        },
+        { pref: "requestUpdates" }
+      );
+    }
   }
 
   await BloodRequest.deleteMany({ requestedBy: userId });

@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import { createNotification, publicNotification } from "../utils/createNotification.js";
 
 // userId -> Set of socket ids (a user can have multiple tabs/devices open)
 const onlineUsers = new Map();
@@ -73,6 +74,7 @@ export function initSocket(httpServer) {
       if (!user) return next(new Error("User not found"));
 
       socket.userId = user._id.toString();
+      socket.userName = user.name;
       socket.userRole = user.role;
       socket.bloodGroup = user.bloodGroup;
       next();
@@ -131,6 +133,22 @@ export function initSocket(httpServer) {
             message: populated,
           });
         });
+
+        // Bell notification for the other person. Several messages from the same person
+        // merge into ONE unread notification (with a count) instead of flooding the bell.
+        try {
+          const snippet = text.trim().length > 80 ? `${text.trim().slice(0, 80)}…` : text.trim();
+          const saved = await createNotification(otherId, {
+            type: "message",
+            title: `New message from ${socket.userName}`,
+            body: `${socket.userName}: ${snippet}`,
+            link: `/messages?c=${conversationId}`,
+            dedupeKey: `message:${conversationId}`,
+          });
+          io.to(String(otherId)).emit("notification:new", publicNotification(saved));
+        } catch (err) {
+          console.error("message notification error:", err.message);
+        }
 
         callback?.({ ok: true, message: populated });
       } catch (err) {

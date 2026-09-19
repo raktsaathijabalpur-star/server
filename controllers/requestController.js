@@ -6,6 +6,8 @@ import User, { BLOOD_GROUP_ENUM } from "../models/User.js";
 import generateRequestId from "../utils/generateRequestId.js";
 import { canDonateTo, compatibleDonorGroups } from "../utils/bloodCompatibility.js";
 import { getIO } from "../socket/index.js";
+import { notifyMany, notifyUser } from "../utils/notify.js";
+import { withAvatarUrls } from "../utils/avatarUrl.js";
 
 const OPEN_STATES = ["Open", "Accepted"];
 // A donor who gave blood recently is not offered as a "matching donor".
@@ -135,6 +137,29 @@ export const createRequest = asyncHandler(async (req, res) => {
     }
   );
 
+  // Bell notification for donors who could actually help: compatible blood group, same city,
+  // available, and who haven't switched "New blood requests" off.
+  const recipients = await User.find({
+    role: "donor",
+    availableToDonate: { $ne: false },
+    bloodGroup: { $in: compatibleDonorGroups(created.bloodGroup) },
+    city: cityRegex(created.city),
+    _id: { $ne: req.user._id },
+    "notificationPrefs.newRequests": { $ne: false },
+  })
+    .select("_id")
+    .limit(500)
+    .lean();
+  await notifyMany(
+    recipients.map((u) => u._id),
+    {
+      type: "request:new",
+      title: "New blood request",
+      body: `${created.urgency}: ${created.bloodGroup} needed at ${created.hospitalName}`,
+      link: `/requests?open=${created._id}`,
+    }
+  );
+
   res.status(201).json({
     success: true,
     request: serializeRequest(created.toObject(), req.user),
@@ -238,7 +263,7 @@ export const getMatchingDonors = asyncHandler(async (req, res) => {
     .limit(50)
     .lean();
 
-  res.status(200).json({ success: true, count: donors.length, donors });
+  res.status(200).json({ success: true, count: donors.length, donors: await withAvatarUrls(donors) });
 });
 
 /* ------------------------------------------------------------------ */
@@ -296,6 +321,17 @@ export const acceptRequest = asyncHandler(async (req, res) => {
     helpersCount: updated.helpers.length,
     donor: { id: userId, name: req.user.name, bloodGroup: req.user.bloodGroup },
   });
+
+  await notifyUser(
+    updated.requestedBy._id,
+    {
+      type: "request:accepted",
+      title: "Donor accepted",
+      body: `${req.user.name} (${req.user.bloodGroup}) accepted your request ${updated.requestId}`,
+      link: `/requests?open=${updated._id}`,
+    },
+    { pref: "requestUpdates" }
+  );
 
   res.status(200).json({
     success: true,
@@ -362,6 +398,33 @@ export const fulfillRequest = asyncHandler(async (req, res) => {
   emitTo(creditedIds, "request:fulfilled", { ...payload, credited: true });
   emitTo(notCredited, "request:fulfilled", { ...payload, credited: false });
 
+  await Promise.all([
+    ...creditedIds.map((id) =>
+      notifyUser(
+        id,
+        {
+          type: "request:fulfilled",
+          title: "Request fulfilled",
+          body: `Request ${updated.requestId} was fulfilled. Thank you for donating!`,
+          link: "/donations",
+        },
+        { pref: "requestUpdates" }
+      )
+    ),
+    ...notCredited.map((id) =>
+      notifyUser(
+        id,
+        {
+          type: "request:fulfilled",
+          title: "Request fulfilled",
+          body: `Request ${updated.requestId} was marked as fulfilled.`,
+          link: "/requests",
+        },
+        { pref: "requestUpdates" }
+      )
+    ),
+  ]);
+
   res.status(200).json({ success: true, request: serializeRequest(updated, req.user) });
 });
 
@@ -389,6 +452,21 @@ export const cancelRequest = asyncHandler(async (req, res) => {
     updated.helpers.map((h) => h.user),
     "request:cancelled",
     { _id: updated._id, requestId: updated.requestId }
+  );
+
+  await Promise.all(
+    updated.helpers.map((h) =>
+      notifyUser(
+        h.user,
+        {
+          type: "request:cancelled",
+          title: "Request cancelled",
+          body: `Request ${updated.requestId} was cancelled by the patient.`,
+          link: "/requests",
+        },
+        { pref: "requestUpdates" }
+      )
+    )
   );
 
   res.status(200).json({ success: true, request: serializeRequest(updated, req.user) });

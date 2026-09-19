@@ -1,5 +1,7 @@
 import asyncHandler from "express-async-handler";
 import Support from "../models/Support.js";
+import User from "../models/User.js";
+import { notifyMany } from "../utils/notify.js";
 
 const MAX_AMOUNT = 1000000; // ₹10,00,000
 
@@ -30,6 +32,18 @@ export const submitSupport = asyncHandler(async (req, res) => {
     method,
     showName: req.body.showName === true, // only an explicit `true` makes the name public
   });
+
+  // tell the admins there is something to verify
+  const admins = await User.find({ isAdmin: true }).select("_id").lean();
+  await notifyMany(
+    admins.map((a) => a._id),
+    {
+      type: "support:new",
+      title: "New contribution to verify",
+      body: `${req.user.name} reported ₹${amount.toLocaleString("en-IN")} (${method === "qr" ? "QR code" : "bank transfer"})`,
+      link: "/admin/support",
+    }
+  );
 
   res.status(201).json({
     success: true,
