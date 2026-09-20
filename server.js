@@ -24,9 +24,9 @@ const app = express();
 
 app.use(
   cors({
-    origin: corsOrigin, 
+    origin: corsOrigin,
     credentials: true,
-  })
+  }),
 );
 app.use(express.json());
 app.use(morgan("dev"));
