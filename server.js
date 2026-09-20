@@ -15,6 +15,7 @@ import messageRoutes from "./routes/chatRoutes.js";
 import userRoutes from "./routes/userRoutes.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 import { initSocket } from "./socket/index.js";
+import { corsOrigin } from "./utils/origins.js";
 
 dotenv.config();
 connectDB();
@@ -23,7 +24,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
+    origin: corsOrigin, // CLIENT_URL: one or more website addresses, comma separated
     credentials: true,
   })
 );
@@ -31,7 +32,7 @@ app.use(express.json());
 app.use(morgan("dev"));
 
 app.get("/api/health", (req, res) => {
-  res.json({ success: true, message: "Blood Seva API is running" });
+  res.json({ success: true, message: "Jabalpur Blood Seva API is running" });
 });
 
 app.use("/api/auth", authRoutes);

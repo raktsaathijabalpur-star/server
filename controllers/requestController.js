@@ -7,6 +7,7 @@ import generateRequestId from "../utils/generateRequestId.js";
 import { canDonateTo, compatibleDonorGroups } from "../utils/bloodCompatibility.js";
 import { getIO } from "../socket/index.js";
 import { notifyMany, notifyUser } from "../utils/notify.js";
+import { emailMatchingDonors } from "../utils/requestEmails.js";
 import { withAvatarUrls } from "../utils/avatarUrl.js";
 
 const OPEN_STATES = ["Open", "Accepted"];
@@ -137,8 +138,10 @@ export const createRequest = asyncHandler(async (req, res) => {
     }
   );
 
-  // Bell notification for donors who could actually help: compatible blood group, same city,
-  // available, and who haven't switched "New blood requests" off.
+  // Donors who could actually help: compatible blood group, same city, available, haven't donated
+  // in the last 90 days, and haven't switched "New blood requests" off. They get a bell notification
+  // and (if they gave an email) an email.
+  const since = new Date(Date.now() - DONATION_GAP_DAYS * 24 * 60 * 60 * 1000);
   const recipients = await User.find({
     role: "donor",
     availableToDonate: { $ne: false },
@@ -146,8 +149,9 @@ export const createRequest = asyncHandler(async (req, res) => {
     city: cityRegex(created.city),
     _id: { $ne: req.user._id },
     "notificationPrefs.newRequests": { $ne: false },
+    $or: [{ lastDonationDate: null }, { lastDonationDate: { $lte: since } }],
   })
-    .select("_id")
+    .select("_id name email bloodGroup")
     .limit(500)
     .lean();
   await notifyMany(
@@ -159,6 +163,9 @@ export const createRequest = asyncHandler(async (req, res) => {
       link: `/requests?open=${created._id}`,
     }
   );
+
+  // Emails go out in the background — the patient doesn't wait for them.
+  emailMatchingDonors(created, recipients);
 
   res.status(201).json({
     success: true,

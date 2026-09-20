@@ -14,7 +14,9 @@ export const getConversations = async (req, res) => {
       .sort({ lastMessageAt: -1 });
 
     const formatted = conversations.map((c) => {
-      const other = c.participants.find((p) => String(p._id) !== String(userId));
+      const other = c.participants.find(
+        (p) => String(p._id) !== String(userId),
+      );
       return {
         _id: c._id,
         otherUser: other,
@@ -29,8 +31,15 @@ export const getConversations = async (req, res) => {
     const others = formatted
       .map((f) => f.otherUser)
       .filter(Boolean)
-      .map((o) => ({ _id: o._id, name: o.name, bloodGroup: o.bloodGroup, city: o.city }));
-    const byId = new Map((await withAvatarUrls(others)).map((o) => [String(o._id), o]));
+      .map((o) => ({
+        _id: o._id,
+        name: o.name,
+        bloodGroup: o.bloodGroup,
+        city: o.city,
+      }));
+    const byId = new Map(
+      (await withAvatarUrls(others)).map((o) => [String(o._id), o]),
+    );
     formatted.forEach((f) => {
       if (f.otherUser) f.otherUser = byId.get(String(f.otherUser._id));
     });
@@ -43,18 +52,33 @@ export const getConversations = async (req, res) => {
 };
 
 // POST /api/conversations — find or create a conversation with another user
+// Chat is between a donor and a patient (never donor-donor or patient-patient)
+const OPPOSITE_ROLE = { donor: "patient", patient: "donor" };
+
 export const startConversation = async (req, res) => {
   try {
     const userId = req.user._id;
     const { otherUserId } = req.body;
     if (!otherUserId || !mongoose.isValidObjectId(otherUserId)) {
-      return res.status(400).json({ message: "A valid otherUserId is required" });
+      return res
+        .status(400)
+        .json({ message: "A valid otherUserId is required" });
     }
     if (String(otherUserId) === String(userId)) {
-      return res.status(400).json({ message: "You can't start a chat with yourself" });
+      return res
+        .status(400)
+        .json({ message: "You can't start a chat with yourself" });
     }
-    if (!(await User.exists({ _id: otherUserId }))) {
+    const other = await User.findById(otherUserId).select("role").lean();
+    if (!other) {
       return res.status(404).json({ message: "User not found" });
+    }
+    if (OPPOSITE_ROLE[req.user.role] !== other.role) {
+      return res
+        .status(403)
+        .json({
+          message: "Donors can chat with patients, and patients with donors.",
+        });
     }
 
     let conversation = await Conversation.findOne({
@@ -62,7 +86,9 @@ export const startConversation = async (req, res) => {
     });
 
     if (!conversation) {
-      conversation = await Conversation.create({ participants: [userId, otherUserId] });
+      conversation = await Conversation.create({
+        participants: [userId, otherUserId],
+      });
     }
 
     res.json({ conversation });
@@ -78,7 +104,10 @@ export const getMessages = async (req, res) => {
     const userId = req.user._id;
     const { id } = req.params;
     const { before } = req.query;
-    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 30, 1), 100); // 1..100
+    const limit = Math.min(
+      Math.max(parseInt(req.query.limit, 10) || 30, 1),
+      100,
+    ); // 1..100
 
     // a malformed id can never match a conversation of yours
     if (!mongoose.isValidObjectId(id)) {
@@ -86,14 +115,18 @@ export const getMessages = async (req, res) => {
     }
 
     const conversation = await Conversation.findById(id);
-    if (!conversation || !conversation.participants.map(String).includes(String(userId))) {
+    if (
+      !conversation ||
+      !conversation.participants.map(String).includes(String(userId))
+    ) {
       return res.status(404).json({ message: "Conversation not found" });
     }
 
     const query = { conversation: id };
     if (before) {
       const beforeDate = new Date(before);
-      if (Number.isNaN(beforeDate.getTime())) return res.status(400).json({ message: "Invalid 'before' date" });
+      if (Number.isNaN(beforeDate.getTime()))
+        return res.status(400).json({ message: "Invalid 'before' date" });
       query.createdAt = { $lt: beforeDate };
     }
 
@@ -107,7 +140,7 @@ export const getMessages = async (req, res) => {
     await conversation.save();
     await Message.updateMany(
       { conversation: id, readBy: { $ne: userId } },
-      { $push: { readBy: userId } }
+      { $push: { readBy: userId } },
     );
 
     res.json({ messages: messages.reverse() });

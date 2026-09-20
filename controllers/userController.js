@@ -2,9 +2,15 @@ import mongoose from "mongoose";
 import User from "../models/User.js";
 import { withAvatarUrls } from "../utils/avatarUrl.js";
 
+// Chat is between a donor and a patient: donors see patients, patients see donors.
+const OPPOSITE_ROLE = { donor: "patient", patient: "donor" };
+
 export const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find({ _id: { $ne: req.user._id } })
+    const wanted = OPPOSITE_ROLE[req.user.role];
+    if (!wanted) return res.json({ users: [] });
+
+    const users = await User.find({ _id: { $ne: req.user._id }, role: wanted })
       .select("name bloodGroup city")
       .sort({ name: 1 })
       .lean();
@@ -36,7 +42,7 @@ export const getUserAvatar = async (req, res) => {
 
     res.set({
       "Content-Type": match[1],
-      "Cache-Control": "public, max-age=86400", // the ?v= in the URL changes when the photo changes
+      "Cache-Control": "public, max-age=86400", 
       "X-Content-Type-Options": "nosniff",
     });
     return res.send(Buffer.from(match[2], "base64"));
