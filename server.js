@@ -24,7 +24,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: corsOrigin, // CLIENT_URL: one or more website addresses, comma separated
+    origin: corsOrigin, 
     credentials: true,
   })
 );
@@ -42,13 +42,11 @@ app.use("/api/support", supportRoutes);
 app.use("/api/supporters", supporterRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/notifications", notificationRoutes);
-// Mounted at "/api": exposes /api/donations/me, /api/donations, /api/donors/top
+
 app.use("/api", donationRoutes);
-// chatRoutes applies `protect` to everything under "/api", so it must stay the
-// LAST "/api" router — otherwise it would run before the routers above.
+
 app.use("/api", messageRoutes);
 
-// 404 + error handler — routes ke turant baad, listen se pehle
 app.use(notFound);
 app.use(errorHandler);
 
